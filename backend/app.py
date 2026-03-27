@@ -1,9 +1,12 @@
 from flask import Flask
 from flask_cors import CORS
+from dotenv import load_dotenv
+from pathlib import Path
 from api import api_bp
 from models import init_db
 from utils.logger import get_logger
 
+load_dotenv(Path(__file__).parent / ".env")
 logger = get_logger(__name__)
 
 

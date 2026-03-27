@@ -1,0 +1,24 @@
+# Environment
+.env
+
+# Python bytecode
+__pycache__/
+*.pyc
+*.cpython-*.pyc
+*.pyo
+
+# Test cache
+.pytest_cache/
+
+# Audio files
+*.wav
+*.mp3
+*.flac
+*.ogg
+
+# Database
+*.db
+
+# Hugging Face cache
+.cache/
+.huggingface/

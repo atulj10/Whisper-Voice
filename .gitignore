@@ -1,0 +1,35 @@
+# Audio files
+*.wav
+*.mp3
+*.flac
+*.ogg
+
+# Database
+*.db
+
+# Environment
+.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.cpython-*.pyc
+venv/
+.venv/
+.pytest_cache/
+
+# Hugging Face cache (Whisper model)
+.cache/
+.huggingface/
+
+# Node
+node_modules/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db

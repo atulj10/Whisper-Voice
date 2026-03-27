@@ -2,18 +2,18 @@ import pyperclip
 import pyautogui
 import time
 from utils.logger import get_logger
+from utils.exceptions import EmptyTextError, ClipboardError
 
 logger = get_logger(__name__)
 
 
 class ClipboardService:
-    @staticmethod
-    def copy_and_paste(text: str) -> bool:
+    def copy_and_paste(self, text: str) -> bool:
+        if not text or not text.strip():
+            logger.error("Clipboard copy failed: empty text")
+            raise EmptyTextError()
+        
         try:
-            if not text or not text.strip():
-                logger.error("Clipboard copy failed: empty text")
-                raise ValueError("Text cannot be empty")
-            
             pyperclip.copy(text)
             logger.info("Text copied to clipboard successfully")
             
@@ -22,9 +22,8 @@ class ClipboardService:
             logger.info("Text pasted successfully")
             
             return True
-        except ValueError as e:
-            logger.error(f"Clipboard validation error: {e}")
+        except EmptyTextError:
             raise
         except Exception as e:
             logger.error(f"Failed to copy/paste: {e}")
-            raise
+            raise ClipboardError(f"Failed to copy/paste: {e}")

@@ -4,6 +4,7 @@ import sounddevice as sd
 from pathlib import Path
 from config import SAMPLE_RATE, CHANNELS, TEMP_AUDIO_PATH, MIN_AUDIO_DURATION
 from utils.logger import get_logger
+from utils.exceptions import NoAudioDataError, AudioTooShortError
 
 logger = get_logger(__name__)
 
@@ -41,7 +42,7 @@ class AudioService:
 
         if not self.audio_data:
             logger.error("No audio data recorded")
-            raise ValueError("No audio data recorded")
+            raise NoAudioDataError()
 
         audio_combined = np.concatenate(self.audio_data, axis=0)
         duration = len(audio_combined) / SAMPLE_RATE
@@ -49,14 +50,8 @@ class AudioService:
         logger.info(f"Recording stopped. Duration: {duration:.2f}s")
 
         if duration < MIN_AUDIO_DURATION:
-            logger.error(
-                f"Audio too short: {duration:.2f}s "
-                f"(minimum: {MIN_AUDIO_DURATION}s)"
-            )
-            raise ValueError(
-                f"Audio duration {duration:.2f}s is below minimum "
-                f"{MIN_AUDIO_DURATION}s"
-            )
+            logger.error(f"Audio too short: {duration:.2f}s (minimum: {MIN_AUDIO_DURATION}s)")
+            raise AudioTooShortError(f"Audio duration {duration:.2f}s is below minimum {MIN_AUDIO_DURATION}s")
 
         with wave.open(str(TEMP_AUDIO_PATH), "wb") as wf:
             wf.setnchannels(CHANNELS)

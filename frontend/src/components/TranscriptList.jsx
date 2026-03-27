@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { FileText } from "lucide-react";
 import { getTranscripts } from "../services/api";
 
 function TranscriptList() {
@@ -24,37 +25,38 @@ function TranscriptList() {
   };
 
   if (loading) {
-    return <p>Loading transcripts...</p>;
+    return (
+      <div className="text-center py-8">
+        <p className="text-gray-500">Loading transcripts...</p>
+      </div>
+    );
   }
 
   if (transcripts.length === 0) {
     return (
-      <div style={{ marginTop: "40px", textAlign: "center" }}>
-        <p>No transcripts yet. Start recording to see results here.</p>
+      <div className="max-w-xl mx-auto px-4 mt-8 text-center">
+        <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+        <p className="text-gray-500">No transcripts yet. Start recording to see results here.</p>
       </div>
     );
   }
 
   return (
-    <div style={{ marginTop: "40px", maxWidth: "600px", margin: "40px auto" }}>
-      <h2>Transcripts</h2>
-      {transcripts.map((t) => (
-        <div
-          key={t.id}
-          style={{
-            border: "1px solid #ddd",
-            borderRadius: "5px",
-            padding: "15px",
-            marginBottom: "10px",
-            backgroundColor: "#f9f9f9",
-          }}
-        >
-          <p style={{ margin: "0 0 10px 0" }}>{t.text}</p>
-          <small style={{ color: "#666" }}>
-            {new Date(t.created_at).toLocaleString()} | Status: {t.status}
-          </small>
-        </div>
-      ))}
+    <div className="max-w-xl mx-auto px-4 mt-8">
+      <h2 className="text-lg font-semibold text-gray-800 mb-4">Recent Transcripts</h2>
+      <div className="space-y-3">
+        {transcripts.map((t) => (
+          <div
+            key={t.id}
+            className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow"
+          >
+            <p className="text-gray-800 mb-2">{t.text}</p>
+            <p className="text-xs text-gray-400">
+              {new Date(t.created_at).toLocaleString()} • {t.status}
+            </p>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

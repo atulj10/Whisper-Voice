@@ -1,5 +1,15 @@
 # Architecture Document
 
+## System Overview
+
+Voice Clipboard Assistant is a local desktop application that:
+1. Listens for global hotkey (Ctrl+Space)
+2. Records audio when hotkey is pressed
+3. Transcribes speech using local AI (faster-whisper)
+4. Copies and pastes text automatically
+
+---
+
 ## System Components
 
 ### 1. Frontend (React)
@@ -10,175 +20,291 @@
   - `App.jsx`: Main application component
 
 ### 2. API Layer (Flask)
-- **Purpose**: HTTP interface between frontend and backend services
 - **File**: `api/routes.py`
 - **Responsibilities**:
   - Route incoming HTTP requests
   - Return JSON responses
-  - Handle error responses
+  - Handle error responses with consistent format
+- **DO NOT**: Contains business logic
 
 ### 3. Service Layer
-- **Purpose**: Encapsulates all business logic
-- **Services**:
-  - `ListenerService`: Manages global hotkey listener lifecycle
-  - `AudioService`: Handles audio recording with sounddevice
-  - `TranscriptionService`: Local AI transcription using faster-whisper
-  - `ClipboardService`: Copies text and auto-pastes
+- **Files**:
+  - `services/container.py`: Dependency injection container
+  - `services/listener_service.py`: Hotkey and recording orchestration
+  - `services/audio_service.py`: Audio capture and file management
+  - `services/transcription_service.py`: AI transcription
+  - `services/clipboard_service.py`: Copy and paste operations
+- **DO NOT**: Direct database access
 
 ### 4. Repository Layer
-- **Purpose**: Handles all database operations
 - **File**: `repositories/transcript_repository.py`
 - **Responsibilities**: CRUD operations for transcripts
 
 ### 5. Model Layer
-- **Purpose**: Defines database schema
 - **File**: `models/transcript.py`
-- **Components**: SQLAlchemy model for transcripts table
+- **Responsibilities**: SQLAlchemy model, database schema
 
 ### 6. Utility Layer
-- **Purpose**: Shared utilities
-- **File**: `utils/logger.py`
-- **Components**: Centralized logging configuration
+- **Files**:
+  - `utils/logger.py`: Centralized logging
+  - `utils/exceptions.py`: Custom exception classes
+
+---
+
+## Directory Structure
+
+```
+backend/
+├── api/
+│   └── routes.py              # HTTP endpoints
+├── services/
+│   ├── container.py          # Dependency injection
+│   ├── listener_service.py    # Hotkey management
+│   ├── audio_service.py      # Audio recording
+│   ├── transcription_service.py # AI transcription
+│   ├── clipboard_service.py   # Copy + paste
+│   └── __init__.py
+├── repositories/
+│   └── transcript_repository.py
+├── models/
+│   └── transcript.py
+├── schemas/
+│   └── transcript_schema.py
+├── utils/
+│   ├── logger.py
+│   ├── exceptions.py          # Custom exceptions
+│   └── __init__.py
+├── ai/
+│   └── agents.md             # AI governance
+├── app.py                     # Entry point
+├── config.py                  # Configuration
+└── requirements.txt
+```
+
+---
 
 ## Data Flow
 
 ```
-User clicks "Initialize Listener"
-    │
-    ▼
-React Component calls API
-    │
-    ▼
-Flask Route receives request
-    │
-    ▼
-ListenerService.start_listener()
-    │
-    ▼
-Background thread starts pynput Listener
-    │
-    ▼
-User presses Ctrl+Space
-    │
-    ▼
-AudioService.start_recording() captures audio
-    │
-    ▼
-User releases Ctrl+Space
-    │
-    ▼
-AudioService.stop_recording() saves to WAV file
-    │
-    ▼
-TranscriptionService.transcribe() - faster-whisper AI
-    │
-    ▼
-ClipboardService.copy_and_paste()
-    │
-    ├── pyperclip.copy() - copies to clipboard
-    └── pyautogui.hotkey("ctrl", "v") - auto-pastes
+┌─────────────────────────────────────────────────────────────┐
+│                        USER ACTION                           │
+│                   Press Ctrl+Space                           │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│                     pynput Listener                          │
+│              Detects hotkey combination                      │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│                   AudioService                               │
+│              sounddevice records audio                       │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│                  User releases key                           │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│                  WAV file saved                             │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│               TranscriptionService                           │
+│                  faster-whisper AI                          │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│                ClipboardService                              │
+│              pyperclip + pyautogui                          │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-## Layer Responsibilities
+---
 
-### API Layer
-- HTTP request handling
-- Response formatting
-- **DO NOT**: Contains business logic
+## Dependency Injection
 
-### Service Layer
-- Business logic implementation
-- External service integration (whisper, pyautogui)
-- Audio processing
-- Clipboard + paste operations
-- **DO NOT**: Direct database access
+### Service Container
 
-### Repository Layer
-- Database CRUD operations
-- Session management
-- **DO NOT**: Business logic
+```python
+class ServiceContainer:
+    @property
+    def listener_service(self) -> ListenerService:
+        if self._listener_service is None:
+            self._listener_service = ListenerService(
+                audio_service=self.audio_service,
+                transcription_service=self.transcription_service,
+                clipboard_service=self.clipboard_service,
+            )
+        return self._listener_service
+```
 
-### Model Layer
-- Database schema definition
-- ORM mappings
-- **DO NOT**: Business logic or API
+**Benefits:**
+- Lazy initialization (services created on demand)
+- Easy mocking for unit tests
+- Single source of truth for service instances
 
-## Why This Architecture?
+---
 
-### 1. Separation of Concerns
-Each layer has a single, well-defined responsibility. Changes to one layer don't cascade to others.
+## Custom Exceptions
 
-### 2. Testability
-Services can be unit tested by mocking dependencies. Routes can be integration tested.
+All exceptions follow a consistent hierarchy:
 
-### 3. Maintainability
-New features can be added by extending existing layers without modifying others.
+```python
+# Base exceptions
+class AudioServiceError(Exception):
+    code = "AUDIO_ERROR"
 
-### 4. Predictability
-Clear data flow makes debugging and understanding the system straightforward.
+class TranscriptionError(Exception):
+    code = "TRANSCRIPTION_ERROR"
 
-### 5. Reusability
-Services like ClipboardService can be reused without modification.
+class ClipboardError(Exception):
+    code = "CLIPBOARD_ERROR"
+
+class ListenerError(Exception):
+    code = "LISTENER_ERROR"
+
+# Specific exceptions
+class NoAudioDataError(AudioServiceError):
+    code = "NO_AUDIO_DATA"
+
+class AudioTooShortError(AudioServiceError):
+    code = "AUDIO_TOO_SHORT"
+
+class EmptyTranscriptionError(TranscriptionError):
+    code = "EMPTY_TRANSCRIPTION"
+
+class EmptyTextError(ClipboardError):
+    code = "EMPTY_TEXT"
+```
+
+**API Response Format:**
+```json
+{
+  "status": "error",
+  "code": "LISTENER_ALREADY_ACTIVE",
+  "message": "Listener is already active"
+}
+```
+
+---
+
+## Error Handling Strategy
+
+### Services
+- Validate inputs before processing
+- Raise specific exceptions with context
+- Log errors with timestamps
+
+### Routes
+```python
+def _error_response(error: Exception):
+    error_code = getattr(error, 'code', 'INTERNAL_ERROR')
+    return {"status": "error", "code": error_code, "message": str(error)}, 400
+```
+
+### Repository
+- Rollback transactions on failure
+- Close sessions in finally block
+
+---
 
 ## Threading Model
 
 ```
-Main Thread (Flask)
-    │
-    |---- API requests handled here
-    |
-    +---- Listener Thread (daemon)
-             |
-             +---- pynput Listener (hotkey detection)
-             +---- sounddevice (audio recording)
-             +---- faster-whisper (transcription)
-             +---- pyperclip + pyautogui (paste)
+┌────────────────────────────────────────┐
+│         Main Thread (Flask)              │
+│                                        │
+│  ┌──────────────────────────────────┐  │
+│  │    API Request Handler           │  │
+│  └──────────────────────────────────┘  │
+└────────────────────────────────────────┘
+                    │
+                    │ spawns
+                    ▼
+┌────────────────────────────────────────┐
+│    Listener Thread (daemon=True)        │
+│                                        │
+│  ┌──────────────────────────────────┐  │
+│  │    pynput Listener               │  │
+│  │    - on_press callback           │  │
+│  │    - on_release callback         │  │
+│  └──────────────────────────────────┘  │
+└────────────────────────────────────────┘
 ```
 
-Listener thread is `daemon=True` - terminates when main program exits.
+- Daemon thread terminates when main process exits
+- Non-blocking - Flask remains responsive
+
+---
 
 ## Key Libraries
 
-| Library | Purpose |
-|---------|---------|
-| pynput | Global hotkey detection |
-| sounddevice | Audio recording |
-| faster-whisper | Local AI transcription |
-| pyperclip | Clipboard operations |
-| pyautogui | Auto-paste (Ctrl+V) |
-| Flask | Web API |
-| React | User interface |
+| Library | Version | Purpose |
+|---------|---------|---------|
+| Flask | 3.0.0 | Web API framework |
+| pynput | 1.7.6 | Global hotkey detection |
+| sounddevice | 0.4.6 | Audio recording |
+| faster-whisper | 1.0.0+ | Local AI transcription |
+| pyperclip | 1.8.2 | Clipboard operations |
+| pyautogui | 0.9.54+ | Auto-paste simulation |
+| React | 18.2.0 | Frontend UI |
+| Tailwind CSS | 3.4.17 | Styling |
 
-## Error Handling Strategy
-
-1. **Services**: Catch exceptions, log errors, return meaningful messages
-2. **Routes**: Return appropriate HTTP status codes
-3. **Repository**: Rollback transactions on failure
-4. **Logging**: All errors logged with timestamps
+---
 
 ## Validation Requirements
 
-1. **Audio**: Must be at least 0.5 seconds duration
-2. **Transcription**: Must return non-empty text
-3. **Clipboard**: Must handle empty text gracefully
+| Component | Validation | Error |
+|-----------|------------|-------|
+| Audio | Duration >= 0.5s | `AudioTooShortError` |
+| Audio | Data recorded | `NoAudioDataError` |
+| Transcription | Non-empty result | `EmptyTranscriptionError` |
+| Clipboard | Non-empty text | `EmptyTextError` |
+
+---
 
 ## Design Decisions
 
-### Why faster-whisper over cloud APIs?
+### Why faster-whisper?
 
-1. **Privacy**: Audio never leaves the machine
-2. **No API Keys**: Free, no account needed
-3. **Offline Capable**: Works without internet
-4. **Optimized**: C++ implementation is fast
+| Factor | faster-whisper | Cloud APIs |
+|--------|---------------|------------|
+| Privacy | Audio stays local | Sent to servers |
+| Cost | Free | API costs |
+| Offline | Works | Requires internet |
+| Speed | CPU optimized | Network dependent |
 
-### Why pyautogui for paste?
+### Why dependency injection?
 
-- Simple cross-platform solution
-- Works with any focused application
-- No complex IPC needed
+- Services can be mocked for testing
+- Dependencies are explicit
+- Easy to swap implementations
 
-### Why daemon thread?
+### Why custom exceptions?
 
-- Flask must remain responsive for API calls
-- Listener should not block the main thread
-- Automatic cleanup on program exit
+- Consistent error format across all services
+- Machine-readable error codes
+- Hierarchical (specific → general)
+
+---
+
+## Layer Responsibilities Summary
+
+| Layer | Responsibility | Access |
+|-------|---------------|--------|
+| API | HTTP handling | Calls services |
+| Service | Business logic | Orchestrates components |
+| Repository | Data access | CRUD operations |
+| Model | Schema definition | Used by repository |
+
+**Rules:**
+- API never contains business logic
+- Services never access database directly
+- All external integrations are in services

@@ -52,8 +52,8 @@ class ListenerService:
         try:
             audio_path = self.audio_service.stop_recording()
             text = self.transcription_service.transcribe(audio_path)
-            self.clipboard_service.copy_to_clipboard(text)
-            logger.info("Recording processed and copied to clipboard")
+            self.clipboard_service.copy_and_paste(text)
+            logger.info("Recording processed, copied and pasted")
         except Exception as e:
             logger.error(f"Error processing recording: {e}")
 

@@ -5,7 +5,7 @@
 ### 1. Frontend (React)
 - **Purpose**: User interface for initializing listener and viewing transcripts
 - **Components**:
-  - `InitializeListener.jsx`: Controls listener state and displays status
+  - `InitializeListener.jsx`: Controls listener state, shows recording status
   - `TranscriptList.jsx`: Displays historical transcripts
   - `App.jsx`: Main application component
 
@@ -22,29 +22,20 @@
 - **Services**:
   - `ListenerService`: Manages global hotkey listener lifecycle
   - `AudioService`: Handles audio recording with sounddevice
-  - `TranscriptionService`: Placeholder for AI transcription
-  - `ClipboardService`: Copies text to system clipboard
+  - `TranscriptionService`: Local AI transcription using faster-whisper
+  - `ClipboardService`: Copies text and auto-pastes
 
 ### 4. Repository Layer
 - **Purpose**: Handles all database operations
 - **File**: `repositories/transcript_repository.py`
-- **Responsibilities**:
-  - CRUD operations for transcripts
-  - Database session management
+- **Responsibilities**: CRUD operations for transcripts
 
 ### 5. Model Layer
 - **Purpose**: Defines database schema
 - **File**: `models/transcript.py`
-- **Components**:
-  - `Transcript`: SQLAlchemy model for transcripts table
-  - Database engine and session configuration
+- **Components**: SQLAlchemy model for transcripts table
 
-### 6. Schema Layer
-- **Purpose**: Validates input/output data
-- **File**: `schemas/transcript_schema.py`
-- **Components**: Pydantic models for data validation
-
-### 7. Utility Layer
+### 6. Utility Layer
 - **Purpose**: Shared utilities
 - **File**: `utils/logger.py`
 - **Components**: Centralized logging configuration
@@ -53,66 +44,63 @@
 
 ```
 User clicks "Initialize Listener"
-    |
-    v
+    │
+    ▼
 React Component calls API
-    |
-    v
+    │
+    ▼
 Flask Route receives request
-    |
-    v
+    │
+    ▼
 ListenerService.start_listener()
-    |
-    v
-New thread starts pynput Listener
-    |
-    v
+    │
+    ▼
+Background thread starts pynput Listener
+    │
+    ▼
 User presses Ctrl+Space
-    |
-    v
-AudioService.start_recording() begins capturing audio
-    |
-    v
+    │
+    ▼
+AudioService.start_recording() captures audio
+    │
+    ▼
 User releases Ctrl+Space
-    |
-    v
-AudioService.stop_recording() saves to temp file
-    |
-    v
-TranscriptionService.transcribe() processes audio
-    |
-    v
-ClipboardService.copy_to_clipboard() copies text
-    |
-    v
-[Future] TranscriptRepository saves to database
+    │
+    ▼
+AudioService.stop_recording() saves to WAV file
+    │
+    ▼
+TranscriptionService.transcribe() - faster-whisper AI
+    │
+    ▼
+ClipboardService.copy_and_paste()
+    │
+    ├── pyperclip.copy() - copies to clipboard
+    └── pyautogui.hotkey("ctrl", "v") - auto-pastes
 ```
 
 ## Layer Responsibilities
 
 ### API Layer
 - HTTP request handling
-- Input validation (via schemas)
 - Response formatting
 - **DO NOT**: Contains business logic
 
 ### Service Layer
 - Business logic implementation
-- External service integration
+- External service integration (whisper, pyautogui)
 - Audio processing
-- Clipboard operations
+- Clipboard + paste operations
 - **DO NOT**: Direct database access
 
 ### Repository Layer
 - Database CRUD operations
 - Session management
-- Query building
 - **DO NOT**: Business logic
 
 ### Model Layer
 - Database schema definition
 - ORM mappings
-- Connection management
 - **DO NOT**: Business logic or API
 
 ## Why This Architecture?
@@ -121,7 +109,7 @@ ClipboardService.copy_to_clipboard() copies text
 Each layer has a single, well-defined responsibility. Changes to one layer don't cascade to others.
 
 ### 2. Testability
-Services can be unit tested by mocking repositories. Routes can be integration tested by mocking services.
+Services can be unit tested by mocking dependencies. Routes can be integration tested.
 
 ### 3. Maintainability
 New features can be added by extending existing layers without modifying others.
@@ -130,33 +118,43 @@ New features can be added by extending existing layers without modifying others.
 Clear data flow makes debugging and understanding the system straightforward.
 
 ### 5. Reusability
-Services like ClipboardService can be used in different contexts without modification.
+Services like ClipboardService can be reused without modification.
 
 ## Threading Model
 
-The system uses Python's `threading` module to run the hotkey listener in the background:
-
 ```
 Main Thread (Flask)
-    |
+    │
     |---- API requests handled here
     |
     +---- Listener Thread (daemon)
              |
-             +---- pynput Listener
-             +---- Audio recording
-             +---- Transcription
-             +---- Clipboard copy
+             +---- pynput Listener (hotkey detection)
+             +---- sounddevice (audio recording)
+             +---- faster-whisper (transcription)
+             +---- pyperclip + pyautogui (paste)
 ```
 
-The listener thread is marked as `daemon=True`, meaning it will be terminated when the main program exits.
+Listener thread is `daemon=True` - terminates when main program exits.
+
+## Key Libraries
+
+| Library | Purpose |
+|---------|---------|
+| pynput | Global hotkey detection |
+| sounddevice | Audio recording |
+| faster-whisper | Local AI transcription |
+| pyperclip | Clipboard operations |
+| pyautogui | Auto-paste (Ctrl+V) |
+| Flask | Web API |
+| React | User interface |
 
 ## Error Handling Strategy
 
 1. **Services**: Catch exceptions, log errors, return meaningful messages
 2. **Routes**: Return appropriate HTTP status codes
 3. **Repository**: Rollback transactions on failure
-4. **Logging**: All errors are logged with timestamps and stack traces
+4. **Logging**: All errors logged with timestamps
 
 ## Validation Requirements
 
@@ -164,9 +162,23 @@ The listener thread is marked as `daemon=True`, meaning it will be terminated wh
 2. **Transcription**: Must return non-empty text
 3. **Clipboard**: Must handle empty text gracefully
 
-## Future Considerations
+## Design Decisions
 
-1. **Async Processing**: Use asyncio for better concurrency
-2. **Queue System**: Add message queue for transcription requests
-3. **Caching**: Cache recent transcripts for quick access
-4. **WebSocket**: Real-time status updates to frontend
+### Why faster-whisper over cloud APIs?
+
+1. **Privacy**: Audio never leaves the machine
+2. **No API Keys**: Free, no account needed
+3. **Offline Capable**: Works without internet
+4. **Optimized**: C++ implementation is fast
+
+### Why pyautogui for paste?
+
+- Simple cross-platform solution
+- Works with any focused application
+- No complex IPC needed
+
+### Why daemon thread?
+
+- Flask must remain responsive for API calls
+- Listener should not block the main thread
+- Automatic cleanup on program exit

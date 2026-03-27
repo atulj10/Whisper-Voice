@@ -1,164 +1,143 @@
 # Voice Clipboard Assistant
 
-A local desktop-assisted web application for voice-to-clipboard transcription.
+A local desktop voice-to-text application that transcribes speech and automatically pastes it.
 
 ## Project Overview
 
 This application allows users to:
-1. Initialize a global listener that works even when the browser is not focused
+1. Initialize a global listener (works even when browser is not focused)
 2. Press **Ctrl+Space** to start recording audio
 3. Release **Ctrl+Space** to stop recording
-4. Have the transcribed text automatically copied to the clipboard
+4. Have speech transcribed locally using AI (Whisper)
+5. Text is automatically copied to clipboard AND pasted
 
 ## Architecture
 
 ```
 React UI (Frontend)
-    |
-    v
+    │
+    ▼
 Flask API (Backend)
-    |
-    v
+    │
+    ▼
 Listener Service (Background Thread)
-    |
-    v
-Hotkey Listener (pynput) -> Audio Recorder (sounddevice) -> Transcription (OpenAI) -> Clipboard (pyperclip)
-    |
-    v
-SQLite Database
+    │
+    ├── Hotkey Listener (pynput)
+    ├── Audio Recorder (sounddevice)
+    ├── Transcription (faster-whisper - local AI)
+    └── Clipboard + Auto-Paste (pyperclip + pyautogui)
 ```
+
+## Features
+
+- **Global Hotkey**: Works across all applications via pynput
+- **Local Transcription**: No API keys needed - uses faster-whisper (Whisper AI)
+- **Auto-Paste**: Automatically pastes transcribed text after recording
+- **Background Threading**: Flask server stays responsive
+- **Real-time Status**: UI shows recording state
 
 ## Directory Structure
 
 ```
 voice-clipboard-assistant/
 ├── backend/
-│   ├── api/               # API routes layer
-│   ├── services/          # Business logic services
-│   ├── repositories/     # Database access layer
-│   ├── models/           # Database models
-│   ├── schemas/          # Data validation schemas
-│   ├── utils/           # Utilities (logging)
-│   ├── ai/              # AI governance documents
-│   ├── app.py           # Flask application entry point
-│   ├── config.py        # Configuration
-│   └── requirements.txt # Flask-only requirements
-├── frontend/            # React frontend
-├── requirements.txt     # Full Python dependencies
-└── README.md
+│   ├── api/routes.py          # API endpoints
+│   ├── services/
+│   │   ├── listener_service.py     # Hotkey management
+│   │   ├── audio_service.py        # Audio recording
+│   │   ├── transcription_service.py # Whisper AI
+│   │   └── clipboard_service.py     # Copy + paste
+│   ├── repositories/          # Database access
+│   ├── models/                # Database models
+│   ├── schemas/               # Data validation
+│   ├── utils/logger.py        # Logging
+│   ├── ai/agents.md           # AI governance
+│   ├── app.py                 # Flask entry point
+│   ├── config.py              # Configuration
+│   └── requirements.txt       # Dependencies
+├── frontend/                  # React UI
+├── .gitignore
+├── README.md
+├── architecture.md
+└── walkthrough_script.md
 ```
 
 ## Setup Instructions
 
-### Backend Setup
-
-1. Navigate to the backend directory:
-   ```bash
-   cd voice-clipboard-assistant/backend
-   ```
-
-2. Create a virtual environment:
-   ```bash
-   python -m venv venv
-   ```
-
-3. Activate the virtual environment:
-   - Windows: `venv\Scripts\activate`
-   - Linux/Mac: `source venv/bin/activate`
-
-4. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-### Frontend Setup
-
-1. Navigate to the frontend directory:
-   ```bash
-   cd voice-clipboard-assistant/frontend
-   ```
-
-2. Install dependencies:
-   ```bash
-   npm install
-   ```
-
-## How to Run
-
-### Start Backend
+### Backend
 
 ```bash
 cd voice-clipboard-assistant/backend
+pip install -r requirements.txt
 python app.py
 ```
 
-The backend will start on `http://localhost:5000`.
+**Note**: First run will download the Whisper AI model (~500MB).
 
-### Start Frontend
+### Frontend
 
 ```bash
 cd voice-clipboard-assistant/frontend
+npm install
 npm run dev
 ```
 
-The frontend will start on `http://localhost:3000`.
+## How to Use
+
+1. Start the backend server: `python app.py`
+2. Start the frontend: `npm run dev`
+3. Open `http://localhost:3000`
+4. Click **Initialize Listener**
+5. Press **Ctrl+Space** anywhere on your computer
+6. Speak your text
+7. Release **Ctrl+Space**
+8. Text is automatically transcribed and pasted!
 
 ## API Endpoints
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/initialize-listener` | POST | Start the global hotkey listener |
-| `/stop-listener` | POST | Stop the global hotkey listener |
-| `/transcripts` | GET | Get all transcripts from the database |
+| `/initialize-listener` | POST | Start global hotkey listener |
+| `/stop-listener` | POST | Stop listener |
 | `/listener-status` | GET | Check if listener is active |
-| `/health` | GET | Health check endpoint |
+| `/transcripts` | GET | Get transcript history |
+| `/health` | GET | Health check |
 
-## Design Decisions
+## Technical Decisions
 
-### Layered Architecture
+### Why faster-whisper instead of cloud APIs?
 
-The application follows a strict layered architecture:
-- **API Layer**: Handles HTTP requests/responses
-- **Service Layer**: Contains business logic
-- **Repository Layer**: Handles database operations
-- **Model Layer**: Defines database schema
-- **Schema Layer**: Validates input/output data
-- **Utility Layer**: Provides logging and helpers
+1. **Privacy**: Audio never leaves your machine
+2. **No API Keys**: Free to use, no account needed
+3. **Offline Capable**: Works without internet
+4. **Fast**: Optimized C++ implementation
 
-### Why This Architecture?
+### Why layered architecture?
 
-1. **Separation of Concerns**: Each layer has a single responsibility
-2. **Testability**: Easy to mock dependencies for unit testing
-3. **Maintainability**: Changes in one layer don't affect others
-4. **Predictability**: Clear data flow makes the system easy to understand
+- **Separation of Concerns**: Each layer has one job
+- **Testability**: Easy to mock dependencies
+- **Maintainability**: Changes isolated to specific layers
+- **Predictability**: Clear data flow
 
-### Threading Model
+### Why threading?
 
-The listener runs in a background thread to avoid blocking the Flask server. This allows the web application to remain responsive while the hotkey listener operates continuously.
+The hotkey listener runs in a background daemon thread so Flask can still handle API requests without blocking.
 
 ## Known Limitations
 
-1. **AI Transcription**: Currently returns placeholder text (TODO)
-2. **Database Storage**: Not yet saving transcripts to database (TODO)
-3. **Platform Support**: Requires Windows for pynput hotkey detection
-4. **Audio Quality**: Uses default system microphone settings
+1. **Model Download**: First run downloads ~500MB Whisper model
+2. **Platform**: Windows-focused (pynput/pyautogui)
+3. **Microphone**: Uses default system microphone
+4. **Languages**: Currently English only
 
 ## Future Extensions
 
-1. **OpenAI Whisper Integration**: Complete AI transcription
-2. **Multiple Hotkeys**: Support custom hotkey configurations
-3. **Audio Settings**: Allow users to select microphone and adjust settings
-4. **Transcript Management**: Edit, delete, and search transcripts
-5. **Dark Mode**: Add theme support to the frontend
-6. **Keyboard Shortcuts**: Add keyboard shortcuts for common actions
-
-## Testing
-
-To run tests (when implemented):
-```bash
-cd voice-clipboard-assistant/backend
-pytest tests/
-```
+1. Multi-language support
+2. Custom hotkey configuration
+3. Microphone selection UI
+4. Transcript editing and deletion
+5. Dark mode UI
+6. Audio device settings
 
 ## License
 
